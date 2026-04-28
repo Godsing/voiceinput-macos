@@ -1,5 +1,6 @@
 ## 需求
 请实现一个 macOS menu-bar 语音输入法应用 (Swift, macOS 14+)，具体要求：
+
 ```
 1. 按住 Fn 键录音，松开后将转录文字注入当前聚焦的输入框。弃用 Apple 本地识别，改用 `URLSessionWebSocketTask` 接入阿里云百炼 Qwen-Omni-Realtime API 进行流式转录。采用 Manual 模式，按住 Fn 持续发送音频帧(Base64 编码的 PCM 数据，事件为 `input_audio_buffer.append`)，松开发送 `input_audio_buffer.commit`。Fn 键通过 `CGEvent tap` 全局监听，需抑制 Fn 事件传递以防止触发 emoji 选择器。
 
@@ -19,10 +20,14 @@
 7. 应用以 `LSUIElement` 模式运行(仅菜单栏图标，无 Dock 图标)。使用 Swift Package Manager 构建，提供 Makefile(build/run/install/clean)，构建产物为签名的 `.app` bundle。"
 ```
 
+> 注：上述需求描述来自 yetong 大神的开源分享
+
 ## 模型调用
 这是可供你调试的临时 API key：<REDACTED> ，调试时请使用模型 qwen3-omni-flash-realtime-2025-09-15
 
-模型说明和调用示例，可参考网页：https://help.aliyun.com/zh/model-studio/realtime?userCode=okjhlpr5#4dbf1dc38dj77 。不过，我已经从该网页中提取了一些关键信息，如下：
+模型说明和调用示例，可参考阿里云官网：https://help.aliyun.com/zh/model-studio/realtime?userCode=okjhlpr5#4dbf1dc38dj77
+
+以下是根据官方文档摘录的示例。
 
 ### 示例方式一： DashScope Python SDK
 
