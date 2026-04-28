@@ -1,50 +1,40 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+# Audio Input Constitution
 
 ## Core Principles
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+### I. Code Quality
+Every module must be self-contained, readable, and maintainable. Favor clarity over cleverness; prefer explicit code over implicit magic. Functions do one thing, have descriptive names, and stay under 40 lines. No dead code, no unused dependencies, no commented-out blocks. Consistent formatting is enforced by linters and formatters — zero warnings is the baseline. Dependencies are pinned; no floating ranges in production. Code reviews verify correctness, readability, and adherence to project conventions before merge.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+### II. Test-First Development (NON-NEGOTIABLE)
+Tests are written before implementation. Red-Green-Refactor cycle strictly enforced: write a failing test, get it to pass, then refactor. Every new feature, bug fix, or behavior change requires a corresponding test. Unit tests cover business logic and edge cases; integration tests cover cross-module contracts and data flows. Test coverage floor is 80% for all new code. Flaky tests are treated as P0 bugs — they are fixed or quarantined immediately, never ignored.
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### III. User Experience Consistency
+All user-facing interfaces follow a unified design system: consistent terminology, visual patterns, interaction models, and feedback mechanisms. Error messages are actionable — they tell the user what went wrong and how to fix it. Loading states, empty states, and failure states are first-class design concerns, never afterthoughts. Accessibility is not optional: keyboard navigation, screen reader support, and WCAG 2.1 AA compliance are required. Changes to UX patterns must be documented and applied project-wide, not piecemeal.
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+### IV. Performance Requirements
+Every feature ships with defined performance budgets. API response times must stay under 200ms for p95 at the 95th percentile. Frontend interactions must respond within 100ms; time-to-interactive must stay under 3 seconds on target devices. Memory leaks are blockers, not nice-to-fixes. Audio processing pipelines must maintain real-time constraints — no buffer underruns or perceptible latency. Performance regressions are caught in CI; any regression beyond 10% on a benchmark blocks the merge.
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### V. Simplicity
+Start with the simplest solution that meets requirements. YAGNI: don't build abstractions for hypothetical future needs. Three similar lines are better than a premature abstraction. No half-finished implementations — either ship the feature complete or don't ship it. Prefer composition over inheritance, explicit over implicit, and flat over nested. When complexity is unavoidable, document the why, not the what.
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+## Security & Reliability
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+- Input validation at every system boundary — never trust external data.
+- Secrets are never committed, logged, or exposed in error messages.
+- Audio data is treated as untrusted input; sanitize before processing or storage.
+- Graceful degradation over hard failure: when a component fails, the system degrades to a safe state rather than crashing.
+- All external API calls have timeouts, retries with backoff, and circuit breakers.
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+## Development Workflow
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+- Feature branches follow the naming convention: `feature/<number>-<short-description>`.
+- Commits are atomic and describe intent, not mechanics.
+- PRs require passing CI, code review approval, and constitution compliance check.
+- Breaking changes require a migration plan documented in the PR.
+- No merge commits on feature branches — use rebase to maintain linear history.
 
 ## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+This constitution supersedes all other practices and conventions. Amendments require: (1) a written proposal with rationale, (2) team review and approval, (3) a migration plan for any existing code that violates the new principle. All PRs and code reviews must verify compliance. Complexity that contradicts these principles must be justified and documented.
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.0.0 | **Ratified**: 2026-04-23 | **Last Amended**: 2026-04-23

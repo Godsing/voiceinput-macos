@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "remote-claude": "^1.0.7"
+  }
+}
