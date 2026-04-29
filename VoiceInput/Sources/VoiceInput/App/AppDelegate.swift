@@ -209,6 +209,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         return
                     }
                     try audioEngine?.start()
+                    debugLog("audio engine started")
                 } catch {
                     recordingLifecycle.finish()
                     debugLog("startRecording failed: \(error.localizedDescription)")
@@ -227,6 +228,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         return
                     }
                     try audioEngine?.start()
+                    debugLog("audio engine started")
                 } catch {
                     recordingLifecycle.finish()
                     debugLog("startRecording failed: \(error.localizedDescription)")

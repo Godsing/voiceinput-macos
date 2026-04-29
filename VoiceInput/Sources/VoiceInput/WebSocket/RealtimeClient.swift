@@ -41,6 +41,12 @@ final class RealtimeClient: NSObject, URLSessionWebSocketDelegate {
     private var connectContinuation: CheckedContinuation<Void, Error>?
     private let connectTimeout: TimeInterval = 15
 
+    private let sendSerializer = AsyncOperationSerializer()
+    private var inputAudioBufferTracker = InputAudioBufferTracker()
+    private var commitContinuation: CheckedContinuation<Void, Error>?
+    private var commitTimeoutItem: DispatchWorkItem?
+    private let commitTimeout: TimeInterval = 10
+
     private var idleTimer: DispatchWorkItem?
     private let idleTimeout: TimeInterval = 60
 
@@ -122,11 +128,34 @@ final class RealtimeClient: NSObject, URLSessionWebSocketDelegate {
     }
 
     func appendAudioBuffer(_ base64PCM: String) async throws {
-        try await sendEvent(["type": "input_audio_buffer.append", "audio": base64PCM])
+        try await sendSerializer.run {
+            try await self.sendEventUnserialized(["type": "input_audio_buffer.append", "audio": base64PCM])
+            self.inputAudioBufferTracker.recordAppend(base64PCM: base64PCM)
+        }
     }
 
     func commitAudioBuffer() async throws {
-        try await sendEvent(["type": "input_audio_buffer.commit"])
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            beginCommitWait(continuation)
+            Task {
+                do {
+                    try await sendSerializer.run {
+                        guard self.inputAudioBufferTracker.canCommit else {
+                            let bytes = self.inputAudioBufferTracker.pendingBytes
+                            let chunks = self.inputAudioBufferTracker.pendingChunks
+                            self.inputAudioBufferTracker.reset()
+                            throw RealtimeError.insufficientAudio(bytes: bytes, chunks: chunks)
+                        }
+                        debugLogWS(
+                            "committing audio buffer bytes=\(self.inputAudioBufferTracker.pendingBytes), chunks=\(self.inputAudioBufferTracker.pendingChunks)"
+                        )
+                        try await self.sendEventUnserialized(["type": "input_audio_buffer.commit"])
+                    }
+                } catch {
+                    self.completeCommit(throwing: error)
+                }
+            }
+        }
     }
 
     func createResponse() async throws {
@@ -162,6 +191,9 @@ final class RealtimeClient: NSObject, URLSessionWebSocketDelegate {
         cancelIdleTimer()
         connectContinuation?.resume(throwing: RealtimeError.notConnected)
         connectContinuation = nil
+        completeCommit(throwing: RealtimeError.notConnected)
+        completeResponse(throwing: RealtimeError.notConnected)
+        inputAudioBufferTracker.reset()
         webSocketTask?.cancel(with: .normalClosure, reason: nil)
         webSocketTask = nil
         state = .disconnected
@@ -181,6 +213,46 @@ final class RealtimeClient: NSObject, URLSessionWebSocketDelegate {
     private func cancelIdleTimer() {
         idleTimer?.cancel()
         idleTimer = nil
+    }
+
+    private func beginCommitWait(_ continuation: CheckedContinuation<Void, Error>) {
+        commitTimeoutItem?.cancel()
+        commitContinuation?.resume(throwing: RealtimeError.notConnected)
+        commitContinuation = continuation
+
+        let timeoutItem = DispatchWorkItem { [weak self] in
+            self?.completeCommit(throwing: RealtimeError.timeout)
+        }
+        commitTimeoutItem = timeoutItem
+        DispatchQueue.global().asyncAfter(deadline: .now() + commitTimeout, execute: timeoutItem)
+    }
+
+    @discardableResult
+    private func completeCommit() -> Bool {
+        guard let continuation = commitContinuation else { return false }
+        commitTimeoutItem?.cancel()
+        commitTimeoutItem = nil
+        commitContinuation = nil
+        continuation.resume()
+        return true
+    }
+
+    @discardableResult
+    private func completeCommit(throwing error: Error) -> Bool {
+        guard let continuation = commitContinuation else { return false }
+        commitTimeoutItem?.cancel()
+        commitTimeoutItem = nil
+        commitContinuation = nil
+        continuation.resume(throwing: error)
+        return true
+    }
+
+    @discardableResult
+    private func completeResponse(throwing error: Error) -> Bool {
+        guard let continuation = responseDoneContinuation else { return false }
+        responseDoneContinuation = nil
+        continuation.resume(throwing: error)
+        return true
     }
 
     // MARK: - URLSessionWebSocketDelegate
@@ -248,6 +320,9 @@ final class RealtimeClient: NSObject, URLSessionWebSocketDelegate {
         debugLogWS("handleEvent: type=\(type)")
 
         switch type {
+        case "input_audio_buffer.committed":
+            inputAudioBufferTracker.reset()
+            _ = completeCommit()
         case "response.text.delta":
             if let delta = json["delta"] as? String {
                 accumulatedTranscript += delta
@@ -273,15 +348,43 @@ final class RealtimeClient: NSObject, URLSessionWebSocketDelegate {
                 responseAlreadyDone = true
             }
         case "error":
-            let msg = (json["error"] as? [String: Any])?["message"] as? String ?? "Unknown error"
-            onError?(msg)
+            let msg = serverErrorMessage(from: json)
+            debugLogWS("handleEvent: error=\(msg)")
+            inputAudioBufferTracker.reset()
+            let error = RealtimeError.serverError(msg)
+            let handled = completeCommit(throwing: error) || completeResponse(throwing: error)
+            if !handled {
+                onError?(msg)
+            }
         default: break
+        }
+    }
+
+    private func serverErrorMessage(from json: [String: Any]) -> String {
+        guard let error = json["error"] as? [String: Any] else { return "Unknown error" }
+        let code = error["code"] as? String
+        let message = error["message"] as? String
+        switch (code, message) {
+        case let (code?, message?):
+            return "\(code): \(message)"
+        case let (code?, nil):
+            return code
+        case let (nil, message?):
+            return message
+        default:
+            return "Unknown error"
         }
     }
 
     // MARK: - Send
 
     private func sendEvent(_ event: [String: Any]) async throws {
+        try await sendSerializer.run {
+            try await self.sendEventUnserialized(event)
+        }
+    }
+
+    private func sendEventUnserialized(_ event: [String: Any]) async throws {
         guard let ws = webSocketTask, state == .connected else {
             throw RealtimeError.notConnected
         }
@@ -322,6 +425,9 @@ final class RealtimeClient: NSObject, URLSessionWebSocketDelegate {
 
 enum RealtimeError: LocalizedError {
     case invalidURL, notConnected, encodingFailed, timeout, connectionRefused
+    case insufficientAudio(bytes: Int, chunks: Int)
+    case serverError(String)
+
     var errorDescription: String? {
         switch self {
         case .invalidURL: return "Invalid WebSocket URL"
@@ -329,6 +435,10 @@ enum RealtimeError: LocalizedError {
         case .encodingFailed: return "Failed to encode message"
         case .timeout: return "Operation timed out"
         case .connectionRefused: return "Connection refused by server"
+        case let .insufficientAudio(bytes, chunks):
+            return "No audio captured yet. Hold Fn a little longer and speak. Captured \(bytes) bytes in \(chunks) chunks."
+        case let .serverError(message):
+            return message
         }
     }
 }
