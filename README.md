@@ -191,4 +191,4 @@ VoiceInputTests/
 
 ## 许可
 
-Private project.
+本项目采用 0BSD (Zero-Clause BSD) License，这是非常宽松的开源协议，允许任何人出于任何目的使用、复制、修改和分发本项目代码。
